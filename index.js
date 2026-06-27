@@ -45,13 +45,17 @@ client.on('messageCreate', async (message) => {
 
   try {
 
-    // 🟢 TEST COMMAND (NEW)
+    // 🛑 حماية الستاف (ADMIN فقط)
+    const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+
+    // 🟢 تست (الكل يقدر)
     if (cmd === 'تست') {
       return message.reply('Working ✅');
     }
 
     // 🚫 بان
     if (cmd === 'بان') {
+      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
       if (!member) return message.reply('مين أبند؟');
       if (!member.bannable) return message.reply('ما أقدر أبنده');
 
@@ -62,6 +66,7 @@ client.on('messageCreate', async (message) => {
 
     // 👢 طرد
     if (cmd === 'طرد') {
+      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
       if (!member) return message.reply('مين أطرد؟');
       if (!member.kickable) return message.reply('ما أقدر أطرده');
 
@@ -70,8 +75,9 @@ client.on('messageCreate', async (message) => {
       return message.channel.send('تم الطرد 👢');
     }
 
-    // ⏱ تايم
+// ⏱ تايم
     if (cmd === 'تايم') {
+      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
       if (!member) return message.reply('مين أعطيه تايم؟');
 
       const time = args[0];
@@ -94,10 +100,34 @@ client.on('messageCreate', async (message) => {
       return message.channel.send('تم التايم ⏱');
     }
 
+    // 🔇 كتم
+    if (cmd === 'كتم') {
+      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!member) return message.reply('مين أكتمه؟');
+
+      const time = args[0];
+      const unit = args[1];
+
+      if (!time || !unit) return message.reply('!كتم @user 10 min');
+
+      let ms;
+
+      switch (unit.toLowerCase()) {
+        case 'sec': case 's': ms = time * 1000; break;
+        case 'min': case 'm': ms = time * 60 * 1000; break;
+        case 'hour': case 'h': ms = time * 60 * 60 * 1000; break;
+        case 'day': case 'd': ms = time * 24 * 60 * 60 * 1000; break;
+        default: return message.reply('sec / min / hour / day');
+      }
+
+      await member.timeout(ms);
+      sendLog(message.guild, "🔇 Mute", `${member.user.tag} كتم`, 0x555555);
+      return message.channel.send('تم الكتم 🔇');
+    }
+
     // 🔒 قفل
     if (cmd === 'قفل') {
-      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
-        return message.reply('ما عندك صلاحية');
+      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
 
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
         SendMessages: false
@@ -109,8 +139,7 @@ client.on('messageCreate', async (message) => {
 
     // 🔓 فتح
     if (cmd === 'فتح') {
-      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
-        return message.reply('ما عندك صلاحية');
+      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
 
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
         SendMessages: null
@@ -118,6 +147,50 @@ client.on('messageCreate', async (message) => {
 
       sendLog(message.guild, "🔓 Unlock", `تم الفتح`, 0x00ff00);
       return message.channel.send('تم الفتح 🔓');
+    }
+
+    // 🏷 نك
+    if (cmd === 'نك') {
+      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!member) return message.reply('مين أغير اسمه؟');
+
+      const newNick = args.join(' ');
+      if (!newNick) return message.reply('اكتب الاسم');
+
+      await member.setNickname(newNick);
+
+      sendLog(message.guild, "🏷 Nick", `${member.user.tag} صار: ${newNick}`, 0xaaaaaa);
+      return message.channel.send('تم تغيير النك 🏷');
+    }
+
+    // 🎭 رول
+    if (cmd === 'رول') {
+      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!member) return message.reply('مين أعطيه رول؟');
+
+      const roleName = args.join(' ');
+      const role = message.guild.roles.cache.find(r => r.name === roleName);
+
+      if (!role) return message.reply('الرول غير موجود');
+
+      await member.roles.add(role);
+
+      sendLog(message.guild, "🎭 Role", `${member.user.tag} أخذ ${roleName}`, 0x00ffcc);
+      return message.channel.send('تم إعطاء الرول 🎭');
+    }
+
+    // ⚠ تحذير
+    if (cmd === 'تحذير') {
+      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!member) return message.reply('مين أحذره؟');
+
+      const reason = args.join(' ') || 'بدون سبب';
+
+      if (!warns.has(member.id)) warns.set(member.id, []);
+      warns.get(member.id).push(reason);
+
+      sendLog(message.guild, "⚠ Warn", `${member.user.tag}: ${reason}`, 0xffff00);
+      return message.channel.send('تم التحذير ⚠');
     }
 
   } catch (err) {
