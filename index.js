@@ -1,7 +1,7 @@
-const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
 
 process.on('unhandledRejection', err => {
-  console.log('Unhandled error:', err);
+  console.log('Error:', err);
 });
 
 const client = new Client({
@@ -17,9 +17,18 @@ const warns = new Map();
 
 const LOG_CHANNEL_NAME = "reinlog";
 
-async function log(guild, msg) {
+// 🟢 لوق إيمبيد
+async function sendLog(guild, title, desc, color = 0x2b2d31) {
   const channel = guild.channels.cache.find(c => c.name === LOG_CHANNEL_NAME);
-  if (channel) channel.send(msg).catch(() => {});
+  if (!channel) return;
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(desc)
+    .setColor(color)
+    .setTimestamp();
+
+  channel.send({ embeds: [embed] }).catch(() => {});
 }
 
 client.once('ready', () => {
@@ -41,7 +50,8 @@ client.on('messageCreate', async (message) => {
       if (!member.bannable) return message.reply('ما أقدر أبنده');
 
       await member.ban();
-      log(message.guild, `🚫 ${member.user.tag} تم تبنيده`);
+
+      sendLog(message.guild, "🚫 Ban", `${member.user.tag} تم تبنيده`, 0xff0000);
       return message.channel.send('تم الباند 🚫');
     }
 
@@ -51,19 +61,23 @@ client.on('messageCreate', async (message) => {
       if (!member.kickable) return message.reply('ما أقدر أطرده');
 
       await member.kick();
-      log(message.guild, `👢 ${member.user.tag} تم طرده`);
+
+      sendLog(message.guild, "👢 Kick", `${member.user.tag} تم طرده`, 0xff9900);
       return message.channel.send('تم الطرد 👢');
     }
 
-    // ⏱ تايم أوت
+    // ⏱ تايم أوت (مصلح)
     if (cmd === 'تايم') {
       if (!member) return message.reply('مين أعطيه تايم؟');
 
-      const time = args[0];
-      const unit = args[1];
+      const time = args[1];
+      const unit = args[2];
+
+      if (!time || !unit) return message.reply('!تايم @user 10 min');
 
       let ms;
-      switch (unit?.toLowerCase()) {
+
+      switch (unit.toLowerCase()) {
         case 'sec': case 's': ms = time * 1000; break;
         case 'min': case 'm': ms = time * 60 * 1000; break;
         case 'hour': case 'h': ms = time * 60 * 60 * 1000; break;
@@ -72,21 +86,48 @@ client.on('messageCreate', async (message) => {
       }
 
       await member.timeout(ms);
-      log(message.guild, `⏱ ${member.user.tag} تايم ${time} ${unit}`);
+
+      sendLog(message.guild, "⏱ Timeout", `${member.user.tag} تايم ${time} ${unit}`, 0x00aaff);
       return message.channel.send('تم التايم ⏱');
     }
 
-    // 🧹 مسح الشات
+    // 🔇 كتم (Timeout قوي)
+    if (cmd === 'كتم') {
+      if (!member) return message.reply('مين أكتمه؟');
+
+      const time = args[0];
+      const unit = args[1];
+
+      if (!time || !unit) return message.reply('!كتم @user 10 min');
+
+      let ms;
+
+      switch (unit.toLowerCase()) {
+        case 'sec': case 's': ms = time * 1000; break;
+        case 'min': case 'm': ms = time * 60 * 1000; break;
+        case 'hour': case 'h': ms = time * 60 * 60 * 1000; break;
+        case 'day': case 'd': ms = time * 24 * 60 * 60 * 1000; break;
+        default: return message.reply('sec / min / hour / day');
+      }
+
+      await member.timeout(ms);
+
+      sendLog(message.guild, "🔇 Mute", `${member.user.tag} كتم ${time} ${unit}`, 0x555555);
+      return message.channel.send('تم الكتم 🔇');
+    }
+
+// 🧹 مسح الشات
     if (cmd === 'مسح') {
       const amount = parseInt(args[0]);
       if (!amount) return message.reply('حدد عدد الرسائل');
 
       await message.channel.bulkDelete(amount, true);
-      log(message.guild, `🧹 تم مسح ${amount} رسائل بواسطة ${message.author.tag}`);
+
+      sendLog(message.guild, "🧹 Clear", `تم مسح ${amount} رسائل بواسطة ${message.author.tag}`, 0xffffff);
       return message.channel.send('تم المسح 🧹');
     }
 
-// 🔒 قفل
+    // 🔒 قفل
     if (cmd === 'قفل') {
       if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
         return message.reply('ما عندك صلاحية');
@@ -95,7 +136,7 @@ client.on('messageCreate', async (message) => {
         SendMessages: false
       });
 
-      log(message.guild, `🔒 تم قفل الشات`);
+      sendLog(message.guild, "🔒 Lock", `تم قفل الشات`, 0xff0000);
       return message.channel.send('تم القفل 🔒');
     }
 
@@ -108,7 +149,7 @@ client.on('messageCreate', async (message) => {
         SendMessages: true
       });
 
-      log(message.guild, `🔓 تم فتح الشات`);
+      sendLog(message.guild, "🔓 Unlock", `تم فتح الشات`, 0x00ff00);
       return message.channel.send('تم الفتح 🔓');
     }
 
@@ -120,7 +161,8 @@ client.on('messageCreate', async (message) => {
       if (!newNick) return message.reply('اكتب الاسم');
 
       await member.setNickname(newNick);
-      log(message.guild, `🏷 ${member.user.tag} صار نك: ${newNick}`);
+
+      sendLog(message.guild, "🏷 Nickname", `${member.user.tag} صار: ${newNick}`, 0xaaaaaa);
       return message.channel.send('تم تغيير النك 🏷');
     }
 
@@ -134,7 +176,8 @@ client.on('messageCreate', async (message) => {
       if (!role) return message.reply('الرول غير موجود');
 
       await member.roles.add(role);
-      log(message.guild, `🎭 ${member.user.tag} أخذ رول ${roleName}`);
+
+      sendLog(message.guild, "🎭 Role", `${member.user.tag} أخذ رول ${roleName}`, 0x00ffcc);
       return message.channel.send('تم إعطاء الرول 🎭');
     }
 
@@ -147,7 +190,7 @@ client.on('messageCreate', async (message) => {
       if (!warns.has(member.id)) warns.set(member.id, []);
       warns.get(member.id).push(reason);
 
-      log(message.guild, `⚠ ${member.user.tag} تحذير: ${reason}`);
+      sendLog(message.guild, "⚠ Warning", `${member.user.tag}: ${reason}`, 0xffff00);
       return message.channel.send('تم التحذير ⚠');
     }
 
