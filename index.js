@@ -11,7 +11,7 @@ const client = new Client({
 
 const warns = new Map();
 
-client.once('clientReady', () => {
+client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
 
@@ -47,8 +47,8 @@ client.on('messageCreate', async (message) => {
       if (!member) return message.reply('مين أعطيه تايم؟');
       if (!member.moderatable) return message.reply('رتبة الشخص أعلى من البوت');
 
-      const time = args[1];
-      const unit = args[2];
+      const time = args[0];
+      const unit = args[1];
       if (!time || !unit) return message.reply('!تايم @user 10 sec');
 
       let ms;
@@ -86,13 +86,13 @@ client.on('messageCreate', async (message) => {
       return message.channel.send('تم التايم ⏱');
     }
 
-    // 🔇 ميوت (رول + وقت)
+    // 🔇 ميوت
     if (cmd === 'ميوت') {
       if (!member) return message.reply('مين أكتمه؟');
       if (!member.moderatable) return message.reply('رتبة الشخص أعلى من البوت');
 
-      const time = args[1];
-      const unit = args[2];
+      const time = args[0];
+      const unit = args[1];
       if (!time || !unit) return message.reply('!ميوت @user 10 min');
 
       let ms;
@@ -146,7 +146,7 @@ client.on('messageCreate', async (message) => {
       return message.channel.send('تم الميوت 🔇');
     }
 
-    // 🔊 فك ميوت
+// 🔊 فك ميوت
     if (cmd === 'فك') {
       const role = message.guild.roles.cache.find(r => r.name === "Muted");
       if (!role) return message.reply('ما فيه ميوت');
@@ -157,7 +157,7 @@ client.on('messageCreate', async (message) => {
       return message.channel.send('تم فك الميوت 🔊');
     }
 
-// ⚠ تحذير
+    // ⚠ تحذير
     if (cmd === 'تحذير') {
       if (!member) return message.reply('مين أحذره؟');
 
@@ -199,4 +199,4 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-client.login('MTUxMDM0NDIzMTU2MTE5OTY2Ng.G4CcgP.zvFCssHTWqAyX6u26aIpJV62NV8N3qio6MX08w');
+client.login(process.env.TOKEN);
