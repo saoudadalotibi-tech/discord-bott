@@ -45,6 +45,11 @@ client.on('messageCreate', async (message) => {
 
   try {
 
+    // 🟢 TEST COMMAND (NEW)
+    if (cmd === 'تست') {
+      return message.reply('Working ✅');
+    }
+
     // 🚫 بان
     if (cmd === 'بان') {
       if (!member) return message.reply('مين أبند؟');
