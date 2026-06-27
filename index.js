@@ -15,6 +15,13 @@ const client = new Client({
 
 const warns = new Map();
 
+const LOG_CHANNEL_NAME = "reinlog";
+
+async function log(guild, msg) {
+  const channel = guild.channels.cache.find(c => c.name === LOG_CHANNEL_NAME);
+  if (channel) channel.send(msg).catch(() => {});
+}
+
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
@@ -34,6 +41,7 @@ client.on('messageCreate', async (message) => {
       if (!member.bannable) return message.reply('ما أقدر أبنده');
 
       await member.ban();
+      log(message.guild, `🚫 ${member.user.tag} تم تبنيده`);
       return message.channel.send('تم الباند 🚫');
     }
 
@@ -43,136 +51,65 @@ client.on('messageCreate', async (message) => {
       if (!member.kickable) return message.reply('ما أقدر أطرده');
 
       await member.kick();
+      log(message.guild, `👢 ${member.user.tag} تم طرده`);
       return message.channel.send('تم الطرد 👢');
     }
 
     // ⏱ تايم أوت
     if (cmd === 'تايم') {
       if (!member) return message.reply('مين أعطيه تايم؟');
-      if (!member.moderatable) return message.reply('رتبة الشخص أعلى من البوت');
 
       const time = args[0];
       const unit = args[1];
-      if (!time || !unit) return message.reply('!تايم @user 10 sec');
 
       let ms;
-
-      switch (unit.toLowerCase()) {
-        case 'sec':
-        case 's':
-        case 'ثواني':
-          ms = time * 1000;
-          break;
-
-        case 'min':
-        case 'm':
-        case 'دقائق':
-          ms = time * 60 * 1000;
-          break;
-
-        case 'hour':
-        case 'h':
-        case 'ساعات':
-          ms = time * 60 * 60 * 1000;
-          break;
-
-        case 'day':
-        case 'd':
-        case 'أيام':
-          ms = time * 24 * 60 * 60 * 1000;
-          break;
-
-        default:
-          return message.reply('sec / min / hour / day');
+      switch (unit?.toLowerCase()) {
+        case 'sec': case 's': ms = time * 1000; break;
+        case 'min': case 'm': ms = time * 60 * 1000; break;
+        case 'hour': case 'h': ms = time * 60 * 60 * 1000; break;
+        case 'day': case 'd': ms = time * 24 * 60 * 60 * 1000; break;
+        default: return message.reply('sec / min / hour / day');
       }
 
       await member.timeout(ms);
+      log(message.guild, `⏱ ${member.user.tag} تايم ${time} ${unit}`);
       return message.channel.send('تم التايم ⏱');
     }
 
-// 🔇 ميوت
-    if (cmd === 'ميوت') {
-      if (!member) return message.reply('مين أكتمه؟');
-      if (!member.moderatable) return message.reply('رتبة الشخص أعلى من البوت');
+    // 🧹 مسح الشات
+    if (cmd === 'مسح') {
+      const amount = parseInt(args[0]);
+      if (!amount) return message.reply('حدد عدد الرسائل');
 
-      const time = args[0];
-      const unit = args[1];
-      if (!time || !unit) return message.reply('!ميوت @user 10 min');
-
-      let ms;
-
-      switch (unit.toLowerCase()) {
-        case 'sec':
-        case 's':
-        case 'ثواني':
-          ms = time * 1000;
-          break;
-
-        case 'min':
-        case 'm':
-        case 'دقائق':
-          ms = time * 60 * 1000;
-          break;
-
-        case 'hour':
-        case 'h':
-        case 'ساعات':
-          ms = time * 60 * 60 * 1000;
-          break;
-
-        case 'day':
-        case 'd':
-        case 'أيام':
-          ms = time * 24 * 60 * 60 * 1000;
-          break;
-
-        default:
-          return message.reply('sec / min / hour / day');
-      }
-
-      let role = message.guild.roles.cache.find(r => r.name === "Muted");
-
-      if (!role) {
-        role = await message.guild.roles.create({
-          name: "Muted",
-          permissions: []
-        });
-      }
-
-      await member.roles.add(role);
-
-      setTimeout(async () => {
-        try {
-          await member.roles.remove(role);
-        } catch (e) {
-          console.log(e);
-        }
-      }, ms);
-
-      return message.channel.send('تم الميوت 🔇');
+      await message.channel.bulkDelete(amount, true);
+      log(message.guild, `🧹 تم مسح ${amount} رسائل بواسطة ${message.author.tag}`);
+      return message.channel.send('تم المسح 🧹');
     }
 
-    // 🔊 فك ميوت
-    if (cmd === 'فك') {
-      const role = message.guild.roles.cache.find(r => r.name === "Muted");
-      if (!role) return message.reply('ما فيه ميوت');
+// 🔒 قفل
+    if (cmd === 'قفل') {
+      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
+        return message.reply('ما عندك صلاحية');
 
-      if (!member) return message.reply('مين أفك عنه؟');
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+        SendMessages: false
+      });
 
-      await member.roles.remove(role);
-      return message.channel.send('تم فك الميوت 🔊');
+      log(message.guild, `🔒 تم قفل الشات`);
+      return message.channel.send('تم القفل 🔒');
     }
 
-    // ⚠ تحذير
-    if (cmd === 'تحذير') {
-      if (!member) return message.reply('مين أحذره؟');
+    // 🔓 فتح
+    if (cmd === 'فتح') {
+      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
+        return message.reply('ما عندك صلاحية');
 
-      const reason = args.join(' ') || 'بدون سبب';
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+        SendMessages: true
+      });
 
-      if (!warns.has(member.id)) warns.set(member.id, []);
-      warns.get(member.id).push(reason);
-
-      return message.channel.send(`⚠ تم تحذير ${member.user.username}`);
+      log(message.guild, `🔓 تم فتح الشات`);
+      return message.channel.send('تم الفتح 🔓');
     }
 
     // 🏷 نك
@@ -180,9 +117,10 @@ client.on('messageCreate', async (message) => {
       if (!member) return message.reply('مين أغير اسمه؟');
 
       const newNick = args.join(' ');
-      if (!newNick) return message.reply('اكتب الاسم الجديد');
+      if (!newNick) return message.reply('اكتب الاسم');
 
       await member.setNickname(newNick);
+      log(message.guild, `🏷 ${member.user.tag} صار نك: ${newNick}`);
       return message.channel.send('تم تغيير النك 🏷');
     }
 
@@ -196,12 +134,26 @@ client.on('messageCreate', async (message) => {
       if (!role) return message.reply('الرول غير موجود');
 
       await member.roles.add(role);
+      log(message.guild, `🎭 ${member.user.tag} أخذ رول ${roleName}`);
       return message.channel.send('تم إعطاء الرول 🎭');
     }
 
+    // ⚠ تحذير
+    if (cmd === 'تحذير') {
+      if (!member) return message.reply('مين أحذره؟');
+
+      const reason = args.join(' ') || 'بدون سبب';
+
+      if (!warns.has(member.id)) warns.set(member.id, []);
+      warns.get(member.id).push(reason);
+
+      log(message.guild, `⚠ ${member.user.tag} تحذير: ${reason}`);
+      return message.channel.send('تم التحذير ⚠');
+    }
+
   } catch (err) {
-    console.log('Command Error:', err);
-    return message.reply('صار خطأ، بس البوت ما طاح 👍');
+    console.log(err);
+    return message.reply('صار خطأ 👍');
   }
 });
 
