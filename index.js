@@ -146,7 +146,7 @@ client.on('messageCreate', async (message) => {
         return message.reply('ما عندك صلاحية');
 
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
-        SendMessages: true
+        SendMessages: null
       });
 
       sendLog(message.guild, "🔓 Unlock", `تم فتح الشات`, 0x00ff00);
