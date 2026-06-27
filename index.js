@@ -1,5 +1,9 @@
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 
+process.on('unhandledRejection', err => {
+  console.log('Unhandled error:', err);
+});
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -86,7 +90,7 @@ client.on('messageCreate', async (message) => {
       return message.channel.send('تم التايم ⏱');
     }
 
-    // 🔇 ميوت
+// 🔇 ميوت
     if (cmd === 'ميوت') {
       if (!member) return message.reply('مين أكتمه؟');
       if (!member.moderatable) return message.reply('رتبة الشخص أعلى من البوت');
@@ -140,13 +144,15 @@ client.on('messageCreate', async (message) => {
       setTimeout(async () => {
         try {
           await member.roles.remove(role);
-        } catch {}
+        } catch (e) {
+          console.log(e);
+        }
       }, ms);
 
       return message.channel.send('تم الميوت 🔇');
     }
 
-// 🔊 فك ميوت
+    // 🔊 فك ميوت
     if (cmd === 'فك') {
       const role = message.guild.roles.cache.find(r => r.name === "Muted");
       if (!role) return message.reply('ما فيه ميوت');
@@ -194,7 +200,7 @@ client.on('messageCreate', async (message) => {
     }
 
   } catch (err) {
-    console.log(err);
+    console.log('Command Error:', err);
     return message.reply('صار خطأ، بس البوت ما طاح 👍');
   }
 });
