@@ -1,3 +1,7 @@
+client.on('ready', () => {
+  console.log('Bot is ready');
+});
+
 const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
 
 process.on('unhandledRejection', err => {
