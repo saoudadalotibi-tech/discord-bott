@@ -1,4 +1,14 @@
-const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
+cconst {
+  Client,
+  GatewayIntentBits,
+  PermissionsBitField,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChannelType
+} = require('discord.js');
+
 const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
 
 process.on('unhandledRejection', err => {
@@ -15,223 +25,269 @@ const client = new Client({
   ]
 });
 
-const warns = new Map();
-const LOG_CHANNEL_NAME = "reinlog";
+// 🟢 STAFF ROLES
+const staffRoles = [
+  "1520518573460688999",
+  "1520518072937480344",
+  "1520518922019803216"
+];
+
+// 🟢 HELPERS
+function isStaff(member) {
+  return member.permissions.has(PermissionsBitField.Flags.Administrator) ||
+    member.roles.cache.some(r => staffRoles.includes(r.id));
+}
+
+// 🟢 TICKET STATES
+const claimedTickets = new Map();
+const closedTickets = new Set();
+
+// 🟢 CATEGORY
+const CATEGORY_NAME = "─── ❖ SUPPORT & HELP ───";
 
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
 
-// 🟢 لوق
-async function sendLog(guild, title, desc, color = 0x2b2d31) {
-  const channel = guild.channels.cache.find(c => c.name === LOG_CHANNEL_NAME);
-  if (!channel) return;
-
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(desc)
-    .setColor(color)
-    .setTimestamp();
-
-  channel.send({ embeds: [embed] }).catch(() => {});
-}
-
+// 🟢 MESSAGE COMMANDS
 client.on('messageCreate', async (message) => {
   if (!message.content.startsWith('!') || message.author.bot) return;
 
   const args = message.content.slice(1).trim().split(/ +/);
   const cmd = args.shift();
   const member = message.mentions.members.first();
-  const perms = message.member.permissions;
 
-  try {
+  // 🟢 TEST (ALL)
+  if (cmd === 'تست') {
+    return message.reply('Working ✅');
+  }
 
-    // 🟢 تست (الكل)
-    if (cmd === 'تست') {
-      return message.reply('Working ✅');
+  // 🟢 SETUP TICKET (ADMIN ONLY)
+  if (cmd === 'setup') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
+      return message.reply('❌ للأدمن فقط');
+
+    const embed = new EmbedBuilder()
+      .setColor(0x2b2d31)
+      .setTitle("🎫 Ticket System")
+      .setDescription("اضغط الزر لفتح تكت");
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('create_ticket')
+        .setLabel('Open Ticket 🎫')
+        .setStyle(ButtonStyle.Success)
+    );
+
+    return message.channel.send({ embeds: [embed], components: [row] });
+  }
+
+  // 🚫 BAN
+  if (cmd === 'بان') {
+    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
+    if (!member) return;
+
+    await member.ban();
+    return message.channel.send('تم الباند 🚫');
+  }
+
+  // 👢 KICK
+  if (cmd === 'طرد') {
+    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
+    if (!member) return;
+
+    await member.kick();
+    return message.channel.send('تم الطرد 👢');
+  }
+
+// ⏱ TIME
+  if (cmd === 'تايم') {
+    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
+    if (!member) return;
+
+    const time = args[0];
+    const unit = args[1];
+
+    let ms;
+    switch (unit?.toLowerCase()) {
+      case 'sec': ms = time * 1000; break;
+      case 'min': ms = time * 60000; break;
+      case 'hour': ms = time * 3600000; break;
+      case 'day': ms = time * 86400000; break;
+      default: return;
     }
 
-    // 🚫 بان
-    if (cmd === 'بان') {
-      if (!perms.has(PermissionsBitField.Flags.BanMembers))
-        return message.reply('ما عندك صلاحية بان ❌');
+    await member.timeout(ms);
+    return message.channel.send('تم التايم ⏱');
+  }
 
-      if (!member) return message.reply('مين أبند؟');
-      if (!member.bannable) return message.reply('ما أقدر أبنده');
+  // 🔒 LOCK
+  if (cmd === 'قفل') {
+    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
 
-      await member.ban();
-      sendLog(message.guild, "🚫 Ban", `${member.user.tag}`, 0xff0000);
-      return message.channel.send('تم الباند 🚫');
-    }
+    await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+      SendMessages: false
+    });
 
-    // 👢 طرد
-    if (cmd === 'طرد') {
-      if (!perms.has(PermissionsBitField.Flags.KickMembers))
-        return message.reply('ما عندك صلاحية طرد ❌');
+    return message.channel.send('🔒 تم القفل');
+  }
 
-      if (!member) return message.reply('مين أطرد؟');
-      if (!member.kickable) return message.reply('ما أقدر أطرده');
+  // 🔓 UNLOCK
+  if (cmd === 'فتح') {
+    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
 
-      await member.kick();
-      sendLog(message.guild, "👢 Kick", `${member.user.tag}`, 0xff9900);
-      return message.channel.send('تم الطرد 👢');
-    }
+    await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+      SendMessages: null
+    });
 
-    // ⏱ تايم
-    if (cmd === 'تايم') {
-      if (!perms.has(PermissionsBitField.Flags.ModerateMembers))
-        return message.reply('ما عندك صلاحية تايم ❌');
+    return message.channel.send('🔓 تم الفتح');
+  }
 
-      if (!member) return message.reply('مين أعطيه تايم؟');
+  // 🏷 NICK
+  if (cmd === 'نك') {
+    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
+    if (!member) return;
 
-      const time = args[0];
-      const unit = args[1];
+    const name = args.join(' ');
+    await member.setNickname(name);
 
-      let ms;
-      switch (unit?.toLowerCase()) {
-        case 'sec': case 's': ms = time * 1000; break;
-        case 'min': case 'm': ms = time * 60 * 1000; break;
-        case 'hour': case 'h': ms = time * 60 * 60 * 1000; break;
-        case 'day': case 'd': ms = time * 24 * 60 * 60 * 1000; break;
-        default: return message.reply('sec / min / hour / day');
-      }
+    return message.channel.send('تم تغيير النك 🏷');
+  }
 
-      await member.timeout(ms);
-      sendLog(message.guild, "⏱ Timeout", `${member.user.tag}`, 0x00aaff);
-      return message.channel.send('تم التايم ⏱');
-    }
+// 🎭 ROLE
+  if (cmd === 'رول') {
+    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
 
-// 🔇 كتم
-    if (cmd === 'كتم') {
-      if (!perms.has(PermissionsBitField.Flags.ModerateMembers))
-        return message.reply('ما عندك صلاحية كتم ❌');
+    const role = message.guild.roles.cache.find(r => r.name === args.join(' '));
+    if (!role) return;
 
-      if (!member) return message.reply('مين أكتمه؟');
+    await member.roles.add(role);
+    return message.channel.send('تم إعطاء رول 🎭');
+  }
 
-      const time = args[0];
-      const unit = args[1];
+  // ⚠ WARN
+  if (cmd === 'تحذير') {
+    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
+    return message.channel.send('تم التحذير ⚠');
+  }
 
-      let ms;
-      switch (unit?.toLowerCase()) {
-        case 'sec': case 's': ms = time * 1000; break;
-        case 'min': case 'm': ms = time * 60 * 1000; break;
-        case 'hour': case 'h': ms = time * 60 * 60 * 1000; break;
-        case 'day': case 'd': ms = time * 24 * 60 * 60 * 1000; break;
-        default: return message.reply('sec / min / hour / day');
-      }
+  // 🎧 VOICE JOIN
+  if (cmd === 'دخول') {
+    if (!isStaff(message.member)) return;
 
-      await member.timeout(ms);
-      sendLog(message.guild, "🔇 Mute", `${member.user.tag}`, 0x555555);
-      return message.channel.send('تم الكتم 🔇');
-    }
+    const vc = message.member.voice.channel;
+    if (!vc) return;
 
-    // 🔒 قفل
-    if (cmd === 'قفل') {
-      if (!perms.has(PermissionsBitField.Flags.ManageChannels))
-        return message.reply('ما عندك صلاحية قفل ❌');
+    joinVoiceChannel({
+      channelId: vc.id,
+      guildId: message.guild.id,
+      adapterCreator: message.guild.voiceAdapterCreator
+    });
 
-      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
-        SendMessages: false
-      });
+    return message.channel.send('🎧 دخل الفويس');
+  }
 
-      sendLog(message.guild, "🔒 Lock", `تم القفل`, 0xff0000);
-      return message.channel.send('تم القفل 🔒');
-    }
+  // 🚪 VOICE LEAVE
+  if (cmd === 'خروج') {
+    if (!isStaff(message.member)) return;
 
-    // 🔓 فتح
-    if (cmd === 'فتح') {
-      if (!perms.has(PermissionsBitField.Flags.ManageChannels))
-        return message.reply('ما عندك صلاحية فتح ❌');
+    const connection = getVoiceConnection(message.guild.id);
+    if (!connection) return;
 
-      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
-        SendMessages: null
-      });
+    connection.destroy();
+    return message.channel.send('🚪 طلع من الفويس');
+  }
+});
 
-      sendLog(message.guild, "🔓 Unlock", `تم الفتح`, 0x00ff00);
-      return message.channel.send('تم الفتح 🔓');
-    }
+// 🟢 BUTTON SYSTEM
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return;
 
-    // 🏷 نك
-    if (cmd === 'نك') {
-      if (!perms.has(PermissionsBitField.Flags.ManageNicknames))
-        return message.reply('ما عندك صلاحية تغيير نك ❌');
+  // 🎫 CREATE TICKET
+  if (interaction.customId === 'create_ticket') {
 
-      if (!member) return message.reply('مين أغير اسمه؟');
+    const channel = await interaction.guild.channels.create({
+      name: `ticket-${interaction.user.id}`,
+      type: ChannelType.GuildText,
+      parent: interaction.guild.channels.cache.find(c => c.name === CATEGORY_NAME)?.id,
+      permissionOverwrites: [
+        {
+          id: interaction.guild.roles.everyone,
+          deny: [PermissionsBitField.Flags.ViewChannel]
+        },
+        {
+          id: interaction.user.id,
+          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+        },
+        ...staffRoles.map(id => ({
+          id,
+          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+        }))
+      ]
+    });
 
-      const newNick = args.join(' ');
-      if (!newNick) return message.reply('اكتب الاسم');
+    const embed = new EmbedBuilder()
+      .setColor(0x2b2d31)
+      .setTitle("📌 Ticket Rules")
+      .setDescription("اشرح مشكلتك هنا");
 
-      await member.setNickname(newNick);
-      sendLog(message.guild, "🏷 Nick", `${member.user.tag} → ${newNick}`, 0xaaaaaa);
-      return message.channel.send('تم تغيير النك 🏷');
-    }
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('claim_ticket').setLabel('Claim 🎟').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('close_ticket').setLabel('Close 🔒').setStyle(ButtonStyle.Danger)
+    );
 
-    // 🎭 رول
-    if (cmd === 'رول') {
-      if (!perms.has(PermissionsBitField.Flags.ManageRoles))
-        return message.reply('ما عندك صلاحية رول ❌');
+    channel.send({
+      content: `<@&${staffRoles[2]}>`,
+      embeds: [embed],
+      components: [row]
+    });
 
-      if (!member) return message.reply('مين أعطيه رول؟');
+    return interaction.reply({ content: "تم فتح التكت 🎫", ephemeral: true });
+  }
 
-      const roleName = args.join(' ');
-      const role = message.guild.roles.cache.find(r => r.name === roleName);
+  // 🎟 CLAIM
+  if (interaction.customId === 'claim_ticket') {
+    if (!isStaff(interaction.member))
+      return interaction.reply({ content: '❌ ستاف فقط', ephemeral: true });
 
-      if (!role) return message.reply('الرول غير موجود');
+    if (claimedTickets.has(interaction.channel.id))
+      return interaction.reply({ content: 'مستلم ❌', ephemeral: true });
 
-      await member.roles.add(role);
-      sendLog(message.guild, "🎭 Role", `${member.user.tag} → ${roleName}`, 0x00ffcc);
-      return message.channel.send('تم إعطاء الرول 🎭');
-    }
+    claimedTickets.set(interaction.channel.id, interaction.user.id);
 
-    // ⚠ تحذير
-    if (cmd === 'تحذير') {
-      if (!perms.has(PermissionsBitField.Flags.ModerateMembers))
-        return message.reply('ما عندك صلاحية تحذير ❌');
+    return interaction.reply({ content: 'تم الاستلام 🎟', ephemeral: true });
+  }
 
-      if (!member) return message.reply('مين أحذره؟');
+  // 🔒 CLOSE
+  if (interaction.customId === 'close_ticket') {
+    if (!isStaff(interaction.member))
+      return interaction.reply({ content: '❌ ستاف فقط', ephemeral: true });
 
-      const reason = args.join(' ') || 'بدون سبب';
+    closedTickets.add(interaction.channel.id);
 
-      if (!warns.has(member.id)) warns.set(member.id, []);
-      warns.get(member.id).push(reason);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('delete_ticket')
+        .setLabel('Delete 🗑')
+        .setStyle(ButtonStyle.Danger)
+    );
 
-      sendLog(message.guild, "⚠ Warn", `${member.user.tag}: ${reason}`, 0xffff00);
-      return message.channel.send('تم التحذير ⚠');
-    }
+    await interaction.channel.send("🔒 تم إغلاق التكت");
+    await interaction.channel.send({ components: [row] });
 
-// 🎧 دخول فويس
-    if (cmd === 'دخول') {
-      if (!perms.has(PermissionsBitField.Flags.Administrator))
-        return message.reply('ما عندك صلاحية دخول فويس ❌');
+    return interaction.reply({ content: 'تم القفل 🔒', ephemeral: true });
+  }
 
-      const voiceChannel = message.member.voice.channel;
-      if (!voiceChannel) return message.reply('ادخل فويس أول ❌');
+// 🗑 DELETE
+  if (interaction.customId === 'delete_ticket') {
+    if (!isStaff(interaction.member))
+      return interaction.reply({ content: '❌ ستاف فقط', ephemeral: true });
 
-      joinVoiceChannel({
-        channelId: voiceChannel.id,
-        guildId: message.guild.id,
-        adapterCreator: message.guild.voiceAdapterCreator
-      });
+    interaction.reply({ content: 'يتم الحذف...' });
 
-      return message.channel.send('تم دخول الفويس 🎧');
-    }
-
-    // 🚪 خروج فويس
-    if (cmd === 'خروج') {
-      if (!perms.has(PermissionsBitField.Flags.Administrator))
-        return message.reply('ما عندك صلاحية خروج ❌');
-
-      const connection = getVoiceConnection(message.guild.id);
-      if (!connection) return message.reply('البوت مو داخل فويس ❌');
-
-      connection.destroy();
-
-      return message.channel.send('تم خروج البوت 🚪');
-    }
-
-  } catch (err) {
-    console.log(err);
-    return message.reply('صار خطأ 👍');
+    setTimeout(() => {
+      interaction.channel.delete();
+    }, 2000);
   }
 });
 
