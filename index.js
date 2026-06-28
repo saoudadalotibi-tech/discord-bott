@@ -1,4 +1,5 @@
 const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
 
 process.on('unhandledRejection', err => {
   console.log('Error:', err);
@@ -9,20 +10,19 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates
   ]
 });
 
 const warns = new Map();
-
 const LOG_CHANNEL_NAME = "reinlog";
 
-// 🟢 Ready event
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
 
-// 🟢 لوق إيمبيد
+// 🟢 لوق
 async function sendLog(guild, title, desc, color = 0x2b2d31) {
   const channel = guild.channels.cache.find(c => c.name === LOG_CHANNEL_NAME);
   if (!channel) return;
@@ -42,52 +42,53 @@ client.on('messageCreate', async (message) => {
   const args = message.content.slice(1).trim().split(/ +/);
   const cmd = args.shift();
   const member = message.mentions.members.first();
+  const perms = message.member.permissions;
 
   try {
 
-    // 🛑 حماية الستاف (ADMIN فقط)
-    const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
-
-    // 🟢 تست (الكل يقدر)
+    // 🟢 تست (الكل)
     if (cmd === 'تست') {
       return message.reply('Working ✅');
     }
 
     // 🚫 بان
     if (cmd === 'بان') {
-      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!perms.has(PermissionsBitField.Flags.BanMembers))
+        return message.reply('ما عندك صلاحية بان ❌');
+
       if (!member) return message.reply('مين أبند؟');
       if (!member.bannable) return message.reply('ما أقدر أبنده');
 
       await member.ban();
-      sendLog(message.guild, "🚫 Ban", `${member.user.tag} تم تبنيده`, 0xff0000);
+      sendLog(message.guild, "🚫 Ban", `${member.user.tag}`, 0xff0000);
       return message.channel.send('تم الباند 🚫');
     }
 
     // 👢 طرد
     if (cmd === 'طرد') {
-      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!perms.has(PermissionsBitField.Flags.KickMembers))
+        return message.reply('ما عندك صلاحية طرد ❌');
+
       if (!member) return message.reply('مين أطرد؟');
       if (!member.kickable) return message.reply('ما أقدر أطرده');
 
       await member.kick();
-      sendLog(message.guild, "👢 Kick", `${member.user.tag} تم طرده`, 0xff9900);
+      sendLog(message.guild, "👢 Kick", `${member.user.tag}`, 0xff9900);
       return message.channel.send('تم الطرد 👢');
     }
 
-// ⏱ تايم
+    // ⏱ تايم
     if (cmd === 'تايم') {
-      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!perms.has(PermissionsBitField.Flags.ModerateMembers))
+        return message.reply('ما عندك صلاحية تايم ❌');
+
       if (!member) return message.reply('مين أعطيه تايم؟');
 
       const time = args[0];
       const unit = args[1];
 
-      if (!time || !unit) return message.reply('!تايم @user 10 min');
-
       let ms;
-
-      switch (unit.toLowerCase()) {
+      switch (unit?.toLowerCase()) {
         case 'sec': case 's': ms = time * 1000; break;
         case 'min': case 'm': ms = time * 60 * 1000; break;
         case 'hour': case 'h': ms = time * 60 * 60 * 1000; break;
@@ -96,23 +97,22 @@ client.on('messageCreate', async (message) => {
       }
 
       await member.timeout(ms);
-      sendLog(message.guild, "⏱ Timeout", `${member.user.tag} تايم`, 0x00aaff);
+      sendLog(message.guild, "⏱ Timeout", `${member.user.tag}`, 0x00aaff);
       return message.channel.send('تم التايم ⏱');
     }
 
-    // 🔇 كتم
+// 🔇 كتم
     if (cmd === 'كتم') {
-      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!perms.has(PermissionsBitField.Flags.ModerateMembers))
+        return message.reply('ما عندك صلاحية كتم ❌');
+
       if (!member) return message.reply('مين أكتمه؟');
 
       const time = args[0];
       const unit = args[1];
 
-      if (!time || !unit) return message.reply('!كتم @user 10 min');
-
       let ms;
-
-      switch (unit.toLowerCase()) {
+      switch (unit?.toLowerCase()) {
         case 'sec': case 's': ms = time * 1000; break;
         case 'min': case 'm': ms = time * 60 * 1000; break;
         case 'hour': case 'h': ms = time * 60 * 60 * 1000; break;
@@ -121,13 +121,14 @@ client.on('messageCreate', async (message) => {
       }
 
       await member.timeout(ms);
-      sendLog(message.guild, "🔇 Mute", `${member.user.tag} كتم`, 0x555555);
+      sendLog(message.guild, "🔇 Mute", `${member.user.tag}`, 0x555555);
       return message.channel.send('تم الكتم 🔇');
     }
 
     // 🔒 قفل
     if (cmd === 'قفل') {
-      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!perms.has(PermissionsBitField.Flags.ManageChannels))
+        return message.reply('ما عندك صلاحية قفل ❌');
 
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
         SendMessages: false
@@ -139,7 +140,8 @@ client.on('messageCreate', async (message) => {
 
     // 🔓 فتح
     if (cmd === 'فتح') {
-      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!perms.has(PermissionsBitField.Flags.ManageChannels))
+        return message.reply('ما عندك صلاحية فتح ❌');
 
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
         SendMessages: null
@@ -151,21 +153,24 @@ client.on('messageCreate', async (message) => {
 
     // 🏷 نك
     if (cmd === 'نك') {
-      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!perms.has(PermissionsBitField.Flags.ManageNicknames))
+        return message.reply('ما عندك صلاحية تغيير نك ❌');
+
       if (!member) return message.reply('مين أغير اسمه؟');
 
       const newNick = args.join(' ');
       if (!newNick) return message.reply('اكتب الاسم');
 
       await member.setNickname(newNick);
-
-      sendLog(message.guild, "🏷 Nick", `${member.user.tag} صار: ${newNick}`, 0xaaaaaa);
+      sendLog(message.guild, "🏷 Nick", `${member.user.tag} → ${newNick}`, 0xaaaaaa);
       return message.channel.send('تم تغيير النك 🏷');
     }
 
     // 🎭 رول
     if (cmd === 'رول') {
-      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!perms.has(PermissionsBitField.Flags.ManageRoles))
+        return message.reply('ما عندك صلاحية رول ❌');
+
       if (!member) return message.reply('مين أعطيه رول؟');
 
       const roleName = args.join(' ');
@@ -174,14 +179,15 @@ client.on('messageCreate', async (message) => {
       if (!role) return message.reply('الرول غير موجود');
 
       await member.roles.add(role);
-
-      sendLog(message.guild, "🎭 Role", `${member.user.tag} أخذ ${roleName}`, 0x00ffcc);
+      sendLog(message.guild, "🎭 Role", `${member.user.tag} → ${roleName}`, 0x00ffcc);
       return message.channel.send('تم إعطاء الرول 🎭');
     }
 
     // ⚠ تحذير
     if (cmd === 'تحذير') {
-      if (!isAdmin) return message.reply('ما عندك صلاحية ❌');
+      if (!perms.has(PermissionsBitField.Flags.ModerateMembers))
+        return message.reply('ما عندك صلاحية تحذير ❌');
+
       if (!member) return message.reply('مين أحذره؟');
 
       const reason = args.join(' ') || 'بدون سبب';
@@ -191,6 +197,36 @@ client.on('messageCreate', async (message) => {
 
       sendLog(message.guild, "⚠ Warn", `${member.user.tag}: ${reason}`, 0xffff00);
       return message.channel.send('تم التحذير ⚠');
+    }
+
+// 🎧 دخول فويس
+    if (cmd === 'دخول') {
+      if (!perms.has(PermissionsBitField.Flags.Administrator))
+        return message.reply('ما عندك صلاحية دخول فويس ❌');
+
+      const voiceChannel = message.member.voice.channel;
+      if (!voiceChannel) return message.reply('ادخل فويس أول ❌');
+
+      joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: message.guild.id,
+        adapterCreator: message.guild.voiceAdapterCreator
+      });
+
+      return message.channel.send('تم دخول الفويس 🎧');
+    }
+
+    // 🚪 خروج فويس
+    if (cmd === 'خروج') {
+      if (!perms.has(PermissionsBitField.Flags.Administrator))
+        return message.reply('ما عندك صلاحية خروج ❌');
+
+      const connection = getVoiceConnection(message.guild.id);
+      if (!connection) return message.reply('البوت مو داخل فويس ❌');
+
+      connection.destroy();
+
+      return message.channel.send('تم خروج البوت 🚪');
     }
 
   } catch (err) {
