@@ -1,4 +1,6 @@
-cconst {
+const express = require('express');
+
+const {
   Client,
   GatewayIntentBits,
   PermissionsBitField,
@@ -25,6 +27,11 @@ const client = new Client({
   ]
 });
 
+// 🔥 FIX RENDER PORT
+const app = express();
+app.get('/', (req, res) => res.send('Bot is running'));
+app.listen(3000, () => console.log('Server alive'));
+
 // 🟢 STAFF ROLES
 const staffRoles = [
   "1520518573460688999",
@@ -38,11 +45,10 @@ function isStaff(member) {
     member.roles.cache.some(r => staffRoles.includes(r.id));
 }
 
-// 🟢 TICKET STATES
+// 🟢 STATES
 const claimedTickets = new Map();
 const closedTickets = new Set();
 
-// 🟢 CATEGORY
 const CATEGORY_NAME = "─── ❖ SUPPORT & HELP ───";
 
 client.once('ready', () => {
@@ -57,12 +63,10 @@ client.on('messageCreate', async (message) => {
   const cmd = args.shift();
   const member = message.mentions.members.first();
 
-  // 🟢 TEST (ALL)
-  if (cmd === 'تست') {
-    return message.reply('Working ✅');
-  }
+  // 🟢 TEST
+  if (cmd === 'تست') return message.reply('Working ✅');
 
-  // 🟢 SETUP TICKET (ADMIN ONLY)
+  // 🎫 SETUP (ADMIN ONLY)
   if (cmd === 'setup') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
       return message.reply('❌ للأدمن فقط');
@@ -87,6 +91,8 @@ client.on('messageCreate', async (message) => {
     if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
     if (!member) return;
 
+    if (!member.bannable) return message.reply('ما أقدر أبنده');
+
     await member.ban();
     return message.channel.send('تم الباند 🚫');
   }
@@ -96,11 +102,13 @@ client.on('messageCreate', async (message) => {
     if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
     if (!member) return;
 
+    if (!member.kickable) return message.reply('ما أقدر أطرده');
+
     await member.kick();
     return message.channel.send('تم الطرد 👢');
   }
 
-// ⏱ TIME
+// ⏱ TIMEOUT
   if (cmd === 'تايم') {
     if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
     if (!member) return;
@@ -114,7 +122,7 @@ client.on('messageCreate', async (message) => {
       case 'min': ms = time * 60000; break;
       case 'hour': ms = time * 3600000; break;
       case 'day': ms = time * 86400000; break;
-      default: return;
+      default: return message.reply('sec / min / hour / day');
     }
 
     await member.timeout(ms);
@@ -142,61 +150,6 @@ client.on('messageCreate', async (message) => {
 
     return message.channel.send('🔓 تم الفتح');
   }
-
-  // 🏷 NICK
-  if (cmd === 'نك') {
-    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
-    if (!member) return;
-
-    const name = args.join(' ');
-    await member.setNickname(name);
-
-    return message.channel.send('تم تغيير النك 🏷');
-  }
-
-// 🎭 ROLE
-  if (cmd === 'رول') {
-    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
-
-    const role = message.guild.roles.cache.find(r => r.name === args.join(' '));
-    if (!role) return;
-
-    await member.roles.add(role);
-    return message.channel.send('تم إعطاء رول 🎭');
-  }
-
-  // ⚠ WARN
-  if (cmd === 'تحذير') {
-    if (!isStaff(message.member)) return message.reply('❌ ستاف فقط');
-    return message.channel.send('تم التحذير ⚠');
-  }
-
-  // 🎧 VOICE JOIN
-  if (cmd === 'دخول') {
-    if (!isStaff(message.member)) return;
-
-    const vc = message.member.voice.channel;
-    if (!vc) return;
-
-    joinVoiceChannel({
-      channelId: vc.id,
-      guildId: message.guild.id,
-      adapterCreator: message.guild.voiceAdapterCreator
-    });
-
-    return message.channel.send('🎧 دخل الفويس');
-  }
-
-  // 🚪 VOICE LEAVE
-  if (cmd === 'خروج') {
-    if (!isStaff(message.member)) return;
-
-    const connection = getVoiceConnection(message.guild.id);
-    if (!connection) return;
-
-    connection.destroy();
-    return message.channel.send('🚪 طلع من الفويس');
-  }
 });
 
 // 🟢 BUTTON SYSTEM
@@ -206,10 +159,21 @@ client.on('interactionCreate', async (interaction) => {
   // 🎫 CREATE TICKET
   if (interaction.customId === 'create_ticket') {
 
+    let category = interaction.guild.channels.cache.find(
+      c => c.name === CATEGORY_NAME && c.type === ChannelType.GuildCategory
+    );
+
+    if (!category) {
+      category = await interaction.guild.channels.create({
+        name: CATEGORY_NAME,
+        type: ChannelType.GuildCategory
+      });
+    }
+
     const channel = await interaction.guild.channels.create({
-      name: `ticket-${interaction.user.id}`,
+      name: `ticket-${interaction.user.username}`,
       type: ChannelType.GuildText,
-      parent: interaction.guild.channels.cache.find(c => c.name === CATEGORY_NAME)?.id,
+      parent: category.id,
       permissionOverwrites: [
         {
           id: interaction.guild.roles.everyone,
@@ -217,43 +181,51 @@ client.on('interactionCreate', async (interaction) => {
         },
         {
           id: interaction.user.id,
-          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages
+          ]
         },
         ...staffRoles.map(id => ({
           id,
-          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages
+          ]
         }))
       ]
     });
 
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
-      .setTitle("📌 Ticket Rules")
-      .setDescription("اشرح مشكلتك هنا");
+      .setTitle("📌 Support Ticket")
+      .setDescription("اكتب مشكلتك هنا");
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('claim_ticket').setLabel('Claim 🎟').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('close_ticket').setLabel('Close 🔒').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder()
+        .setCustomId('claim_ticket')
+        .setLabel('Claim 🎟')
+        .setStyle(ButtonStyle.Primary),
+
+      new ButtonBuilder()
+        .setCustomId('close_ticket')
+        .setLabel('Close 🔒')
+        .setStyle(ButtonStyle.Danger)
     );
 
-    channel.send({
+    await channel.send({
       content: `<@&${staffRoles[2]}>`,
       embeds: [embed],
       components: [row]
     });
 
-    return interaction.reply({ content: "تم فتح التكت 🎫", ephemeral: true });
+    return interaction.reply({ content: 'تم فتح التكت 🎫', ephemeral: true });
   }
 
-  // 🎟 CLAIM
+// 🎟 CLAIM
   if (interaction.customId === 'claim_ticket') {
     if (!isStaff(interaction.member))
       return interaction.reply({ content: '❌ ستاف فقط', ephemeral: true });
-
-    if (claimedTickets.has(interaction.channel.id))
-      return interaction.reply({ content: 'مستلم ❌', ephemeral: true });
-
-    claimedTickets.set(interaction.channel.id, interaction.user.id);
 
     return interaction.reply({ content: 'تم الاستلام 🎟', ephemeral: true });
   }
@@ -263,8 +235,6 @@ client.on('interactionCreate', async (interaction) => {
     if (!isStaff(interaction.member))
       return interaction.reply({ content: '❌ ستاف فقط', ephemeral: true });
 
-    closedTickets.add(interaction.channel.id);
-
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('delete_ticket')
@@ -272,18 +242,18 @@ client.on('interactionCreate', async (interaction) => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    await interaction.channel.send("🔒 تم إغلاق التكت");
+    await interaction.channel.send('🔒 تم إغلاق التكت');
     await interaction.channel.send({ components: [row] });
 
     return interaction.reply({ content: 'تم القفل 🔒', ephemeral: true });
   }
 
-// 🗑 DELETE
+  // 🗑 DELETE
   if (interaction.customId === 'delete_ticket') {
     if (!isStaff(interaction.member))
       return interaction.reply({ content: '❌ ستاف فقط', ephemeral: true });
 
-    interaction.reply({ content: 'يتم الحذف...' });
+    await interaction.reply({ content: 'يتم الحذف...' });
 
     setTimeout(() => {
       interaction.channel.delete();
